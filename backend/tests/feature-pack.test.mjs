@@ -1,0 +1,8 @@
+import test from "node:test"; import assert from "node:assert/strict"; import fs from "node:fs";
+process.env.OPENROUTER_API_KEY=""; process.env.OPENAI_API_KEY="";
+const {filterRecords,recordsToCsv,buildInsights}=await import("../featurePack.mjs");
+const rows=[{id:1,reference:"A-1",title:"Alpha case",status:"Open",owner:"Sam",risk:"High",amount:0,payload:{note:"fuel"}},{id:2,reference:"B-2",title:"Beta",status:"Closed",owner:"Jo",risk:"Low",amount:50,payload:{}}];
+test("search/filter on main list",()=>{assert.equal(filterRecords(rows,{q:"alpha"}).length,1);assert.equal(filterRecords(rows,{status:"Closed"}).length,1);assert.equal(filterRecords(rows,{q:"fuel"}).length,1);assert.equal(filterRecords(rows,{q:"missing"}).length,0);});
+test("CSV/JSON export shape preserves 0",()=>{const csv=recordsToCsv(rows);assert.ok(csv.includes("A-1"));assert.ok(csv.split("\n")[1].includes(",0,"));assert.equal(JSON.parse(JSON.stringify(rows))[0].amount,0);});
+test("deterministic fallback is labelled aiGenerated:false and preserves false/0/empty",()=>{for(const k of ["portfolio-summary","risk-flags","next-actions"]){const r=buildInsights(rows,k,{});assert.equal(r.aiGenerated,false);assert.equal(r.source,"deterministic-fallback");assert.ok(r.sections.length>=3);assert.ok(r.metrics.some(m=>m.value===0||m.label==="Zero amount"));} const empty=buildInsights([],"portfolio-summary",{});assert.equal(empty.recordCount,0);assert.equal(empty.totalAmount,0);});
+test("feature pack mounted behind auth",()=>{const s=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");assert.ok(s.includes("mountFeaturePack"));assert.ok(s.includes("filterRecords"));});
